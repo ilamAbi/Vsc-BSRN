@@ -1,0 +1,73 @@
+import socket
+import threading
+import shlex
+
+def handle_ipv4():
+    sock4 = socket.socket(socket.AF_INET,socket.SOCK_DGRAM)
+    sock4.bind(('0.0.0.0',4000))
+    print("IPv4 Discoevery-Dienst läuft auf Port 4000")
+
+    nutzer_liste = []
+    while True:
+        data, addr = sock4.recvfrom(1024)
+        text = data.decode().strip()
+        print(f"Empfangen von {addr}: {text}")
+        try:
+            teile = shlex.split(text)
+            befehl = teile[0].upper()
+
+            if befehl == "JOIN":
+                print("JOIN Befehl erkannt")
+                benutzername = teile[1]
+                port = teile[2]
+                ip = addr[0]
+                if(benutzername,ip,port) not in nutzer_liste:
+                    nutzer_liste.append((benutzername,ip,port))
+                else:
+                    print(f"Nutzer bereits in der Liste")
+
+            elif befehl == "LEAVE" and len(teile)==2:
+                print("LEAVE Befehl erkannt")
+                benutzername = teile[1]
+                entfernt = False
+                for eintrag in nutzer_liste:
+                    if eintrag[0] == benutzername and eintrag[1] == addr[0]:
+                        nutzer_liste.remove(eintrag)
+                        entfernt = True
+                        print(f"Nuter entfernt: {benutzername},{eintrag[1]},{eintrag[2]}")
+                        break
+                    if not entfernt:
+                        print(f"Nutzer {benutzername} nicht gefunden oder IP stimmt nicht")
+
+            elif befehl == "WHO":
+                print("WHO-Anfrage erkannt, sende KNOWUSERS-Antwort.")
+                nutzer_text = ", ".join(f"{benutzername} {ip} {port}" for benutzername, ip, port in nutzer_liste)
+                antwort = f"KNOWUSERS {nutzer_text}\n"
+
+                sock4.sendto(antwort.encode(),addr)
+                print(f"Antwort gesendet: {antwort.strip()}")
+
+            elif befehl == "MSG":
+                benutzername = teile[1]
+                nachricht = "".join(teile[2:])
+
+            else:
+                print(f"Unbekannter Befehl: {befehl}")
+
+
+        except Exception as e:
+            print (f"Fehler beim Verarbeiten der Nachricht: {e}")
+
+    
+def handle_ipv6():
+    sock6 = socket.socket(socket.AF_INET6,socket.SOCK_DGRAM)
+    sock6.bind(('::'),4000)
+    print("IPv6 Discovery-Dienst läuft auf Port 4000")
+    while True:
+        data, addr = sock6.recvfrom(1024)
+        print(f"[IPv6] Von {addr}: {data.decode()}")
+
+threading.Thread(target=handle_ipv4, daemon=True).start()
+threading.Thread(target=handle_ipv6, daemon=True).start()
+
+input("Discovery-Dienst läuft. Enter drücken zum Beenden...\n")
